@@ -1,13 +1,12 @@
 # Auto Discord RPC for macOS 🍏👾
 
-Made with Gemini and Copilot.
+A lightweight, automated Discord Rich Presence (RPC) watcher for macOS. Made using Gemini, Copilot.
 
-A lightweight, automated Discord Rich Presence (RPC) watcher for macOS. 
-
-Unlike most Discord RPC tools for Mac that require you to manually click "Connect" and "Disconnect" every time you play, this project uses a background Python script and a macOS Launch Agent (`launchd`) to automatically detect when a specific game opens and updates your Discord status instantly. When you quit the game, it clears your status. It works perfectly with non-Steam games, custom executables, and launchers like GOG Galaxy!
+Unlike most Discord RPC tools for Mac that require you to manually click "Connect" and "Disconnect", this project uses a background Python script and a macOS Launch Agent (`launchd`) to automatically detect when your configured games open and updates your Discord status instantly. When you quit the game, it clears your status. It works perfectly with non-Steam games, custom executables, and launchers like GOG Galaxy!
 
 ## Features
-* **Fully Automated:** Runs invisibly in the background and updates Discord exactly when your game launches.
+* **Multi-Game Support:** Easily track multiple games by adding them to a simple JSON file. No need to restart the watcher when you add a new game!
+* **Fully Automated:** Runs invisibly in the background and updates Discord exactly when a recognized game launches.
 * **No Bloatware:** Uses a simple Python script instead of a heavy, battery-draining desktop app.
 * **TOS Compliant:** Uses Discord's official local IPC socket; it does **not** break Discord's Terms of Service or require account tokens.
 * **Set and Forget:** Auto-starts flawlessly when you log into your Mac.
@@ -17,7 +16,7 @@ Unlike most Discord RPC tools for Mac that require you to manually click "Connec
 ## Prerequisites
 1. **Python 3** installed on your Mac.
 2. The **Discord Desktop App** running locally.
-3. A **Discord Application ID** (Create a free app at the [Discord Developer Portal](https://discord.com/developers/applications)).
+3. A **Discord Application ID** for your game (Create a free app at the [Discord Developer Portal](https://discord.com/developers/applications)).
 4. Uploaded artwork to your app's **Rich Presence > Art Assets** section.
 
 ---
@@ -38,63 +37,113 @@ Install the required Python libraries (`pypresence` to talk to Discord, and `psu
 pip install pypresence psutil
 ```
 
-## Step 2: The Python Script
-Inside the `~/discord-status` folder, create a file named `my_status.py` and paste the following code. 
+## Step 2: Configure Your Games
+This script uses a configuration file so you don't have to edit the code for every new game. 
 
-**Make sure to edit the `client_id`, `game_process_name`, and the `RPC.update` strings to match your specific game and artwork!**
+Inside the `~/discord-status` folder, create a file named `games.json` (you can copy the provided `games.example.json` file as a template). Add your game details like this:
+
+```json
+[
+  {
+    "game_name": "Blade Runner",
+    "process_name": "Blade Runner",
+    "client_id": "YOUR_APPLICATION_ID_HERE",
+    "details": "Investigating Nexus-6",
+    "state": "Los Angeles, 2019",
+    "large_image": "blade-cover",
+    "large_text": "Blade Runner"
+  }
+]
+```
+*   `process_name`: The exact name of the application process running on your Mac.
+*   `large_image`: The exact name of the image you uploaded to the Discord Developer Portal.
+
+*Note: You can add as many game blocks as you want to this list! The script will automatically detect any of them.*
+
+## Step 3: The Python Script
+Inside the `~/discord-status` folder, create a file named `my_status.py` and paste the following code:
 
 ```python
+import json
+import os
 import time
 from pypresence import Presence
 import psutil
 
-client_id = "YOUR_APP_ID_HERE"
-game_process_name = "Blade Runner"  # Change this to the exact name of your application
+# Find the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+CONFIG_PATH = os.path.join(SCRIPT_DIR, "games.json")
 
-RPC = None
-is_connected = False
+def load_games():
+    if not os.path.exists(CONFIG_PATH):
+        return []
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error reading games.json: {e}")
+        return []
 
-def is_game_running():
-    for proc in psutil.process_iter(['name']):
-        try:
-            if game_process_name.lower() in proc.info['name'].lower():
-                return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
-    return False
+active_rpc = None
+current_game = None
 
-print(f"Watching for {game_process_name}...")
+print("Multi-Game Discord RPC Watcher active...")
 
 while True:
-    game_running = is_game_running()
-
-    if game_running and not is_connected:
+    games = load_games()
+    
+    running_processes = []
+    for proc in psutil.process_iter(['name']):
         try:
-            RPC = Presence(client_id)
-            RPC.connect()
-            RPC.update(
-                details="Investigating Nexus-6",     # Top line of text
-                state="Los Angeles, 2019",           # Bottom line of text
-                large_image="blade-cover",           # Name of your uploaded Art Asset
-                large_text="Blade Runner"
-            )
-            is_connected = True
-            print("Game detected! Status updated.")
-        except Exception as e:
+            if proc.info['name']:
+                running_processes.append(proc.info['name'].lower())
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
 
-    elif not game_running and is_connected:
+    matched_game = None
+    for game in games:
+        proc_name = game.get("process_name", "").lower()
+        if proc_name and any(proc_name in p for p in running_processes):
+            matched_game = game
+            break
+
+    if matched_game and (matched_game != current_game):
+        if active_rpc:
+            try:
+                active_rpc.close()
+            except Exception:
+                pass
+            active_rpc = None
+
         try:
-            RPC.close()
-            is_connected = False
+            active_rpc = Presence(matched_game["client_id"])
+            active_rpc.connect()
+
+            update_args = {}
+            if matched_game.get("details"): update_args["details"] = matched_game["details"]
+            if matched_game.get("state"): update_args["state"] = matched_game["state"]
+            if matched_game.get("large_image"): update_args["large_image"] = matched_game["large_image"]
+            if matched_game.get("large_text"): update_args["large_text"] = matched_game["large_text"]
+
+            active_rpc.update(**update_args)
+            current_game = matched_game
+            print(f"Detected game: {matched_game.get('game_name', matched_game['process_name'])}. Status updated!")
+        except Exception as e:
+            print(f"Failed to connect RPC: {e}")
+
+    elif not matched_game and active_rpc:
+        try:
+            active_rpc.close()
             print("Game closed. Status cleared.")
-        except Exception as e:
+        except Exception:
             pass
+        active_rpc = None
+        current_game = None
 
     time.sleep(5)
 ```
 
-## Step 3: Automating with a macOS Launch Agent
+## Step 4: Automating with a macOS Launch Agent
 To make this run automatically in the background on startup, we use a macOS `.plist` file.
 
 1. Open Terminal and type `whoami` to get your exact Mac username. 
@@ -128,13 +177,13 @@ nano ~/Library/LaunchAgents/com.customrp.watcher.plist
 ```
 4. Save and exit (`Ctrl + O`, `Enter`, `Ctrl + X`).
 
-## Step 4: Start the Watcher
+## Step 5: Start the Watcher
 Load the configuration into macOS:
 ```bash
 launchctl load ~/Library/LaunchAgents/com.customrp.watcher.plist
 ```
 
-That's it! You can close Terminal. The script is now watching for your game in the background.
+That's it! You can close Terminal. The script is now watching for your games in the background. **To add a new game in the future, simply update your `games.json` file—the script will automatically detect the changes!**
 
 ---
 

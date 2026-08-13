@@ -1,18 +1,9 @@
-
-    
-    
-    
-    
-    
-    
-    
-    
 import time
 from pypresence import Presence
 import psutil
 
 client_id = "1537568478268227796"
-game_process_name = "Blade Runner"  # The exact name of the application
+game_process_name = "YOUR APP NAME HERE"  # The exact name of the application
 
 RPC = None
 is_connected = False
@@ -27,7 +18,7 @@ def is_game_running():
             pass
     return False
 
-print("Watching for Blade Runner...")
+print("Watching for YOUR APP NAME...")
 
 while True:
     game_running = is_game_running()
@@ -38,8 +29,8 @@ while True:
             RPC = Presence(client_id)
             RPC.connect()
             RPC.update(
-                large_image="blade-cover",
-                large_text="Blade Runner"
+                large_image="your-app-cover-img",
+                large_text="YOUR APP NAME"
             )
             is_connected = True
             print("Game detected! Status updated.")

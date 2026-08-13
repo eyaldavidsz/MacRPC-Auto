@@ -1,5 +1,7 @@
 # Auto Discord RPC for macOS 🍏👾
 
+Made with Gemini and Copilot.
+
 A lightweight, automated Discord Rich Presence (RPC) watcher for macOS. 
 
 Unlike most Discord RPC tools for Mac that require you to manually click "Connect" and "Disconnect" every time you play, this project uses a background Python script and a macOS Launch Agent (`launchd`) to automatically detect when a specific game opens and updates your Discord status instantly. When you quit the game, it clears your status. It works perfectly with non-Steam games, custom executables, and launchers like GOG Galaxy!

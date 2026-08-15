@@ -134,4 +134,7 @@ To find the exact `process_name` to put in your `games.json`, use this trick:
 
 ---
 
-Made with the help of Google Gemini, Github Copilot.
+Made with the help of Gemini, Copilot.
+
+
+I hope you have fun with this!

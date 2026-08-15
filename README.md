@@ -1,6 +1,6 @@
 # Auto Discord RPC for macOS 🍏👾
 
-A lightweight, automated Discord Rich Presence (RPC) watcher for macOS. Made using Gemini, Copilot.
+A lightweight, automated Discord Rich Presence (RPC) watcher for macOS. 
 
 Unlike most Discord RPC tools for Mac that require you to manually click "Connect" and "Disconnect", this project uses a background Python script and a macOS Launch Agent (`launchd`) to automatically detect when your configured games open and updates your Discord status instantly. When you quit the game, it clears your status. It works perfectly with native Mac games, non-Steam games, custom executables, and launchers like GOG Galaxy, Heroic, and CrossOver!
 
@@ -110,9 +110,14 @@ That's it! The script is now watching for your games in the background. **To add
 ## 🔍 How to Find Your Game's Process Name
 If you are running a game through a compatibility layer like Heroic, CrossOver, or ScummVM, the process running on your Mac might not just be the name of the game. 
 
+
 To find the exact `process_name` to put in your `games.json`, use this trick:
 
 1. Launch your game so it is actively running.
 2. Open your Mac's **Terminal** app.
 3. Type `ps x | grep -i "something_related_to_your_game"` and hit Enter.
    * *Example for a Heroic game:*
+
+---
+
+Made with the help of Gemini, Github Copilot.

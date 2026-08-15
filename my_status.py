@@ -26,20 +26,27 @@ print("Multi-Game Discord RPC Watcher active...")
 while True:
     games = load_games()
     
-    # Get a list of all running processes on macOS
-    running_processes = []
-    for proc in psutil.process_iter(['name']):
+    # Get a list of all running processes and their command lines on macOS
+    running_process_cmds = []
+    for proc in psutil.process_iter(['name', 'cmdline']):
         try:
-            if proc.info['name']:
-                running_processes.append(proc.info['name'].lower())
+            # cmdline is a list of arguments (e.g., ['wine-preloader', 'HD_Launcher.exe'])
+            # We join them into a single string so we can easily search for the .exe name
+            if proc.info.get('cmdline'):
+                full_cmd = " ".join(proc.info['cmdline']).lower()
+                running_process_cmds.append(full_cmd)
+            # Fallback to process name if cmdline is restricted or empty
+            elif proc.info.get('name'):
+                running_process_cmds.append(proc.info['name'].lower())
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
 
     # Find if any configured game is currently running
     matched_game = None
     for game in games:
+        # This will now check if the target string (e.g., "hd_launcher.exe") is anywhere in the full command line
         proc_name = game.get("process_name", "").lower()
-        if proc_name and any(proc_name in p for p in running_processes):
+        if proc_name and any(proc_name in cmd for cmd in running_process_cmds):
             matched_game = game
             break
 

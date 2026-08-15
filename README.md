@@ -116,7 +116,6 @@ To find the exact `process_name` to put in your `games.json`, use this trick:
 1. Launch your game so it is actively running.
 2. Open your Mac's **Terminal** app.
 3. Type `ps x | grep -i "something_related_to_your_game"` and hit Enter.
-   * *Example for a Heroic game:*
 
 ---
 

@@ -2,10 +2,11 @@
 
 A lightweight, automated Discord Rich Presence (RPC) watcher for macOS. 
 
-Unlike most Discord RPC tools for Mac that require you to manually click "Connect" and "Disconnect", this project uses a background Python script and a macOS Launch Agent (`launchd`) to automatically detect when your configured games open and updates your Discord status instantly. When you quit the game, it clears your status. It works perfectly with native Mac games, non-Steam games, custom executables, and launchers like GOG Galaxy, Heroic, and CrossOver!
+Unlike most Discord RPC tools for Mac that require you to manually click "Connect" and "Disconnect", this project uses a background Python script and a macOS Launch Agent (`launchd`) to automatically detect when your configured games open and updates your Discord status instantly. When you quit the game, it clears your status. Now powered by a modular plugin system, it can even pull live, real-time match data for supported games to dynamically update your status while you play. It works perfectly with native Mac games, non-Steam games, custom executables, and launchers like GOG Galaxy, Heroic, and CrossOver!
 
 ## Features
 * **Multi-Game Support:** Easily track multiple games by adding them to a simple JSON file. No need to restart the watcher when you add a new game!
+* **Dynamic Plugin System:** Go beyond static text! The new plugin architecture allows the script to fetch live in-game data (like your real-time KDA in League of Legends) and instantly push it to Discord.
 * **Deep Process Scanning:** Reads full command-line arguments, meaning it perfectly detects Windows games running through Wine/CrossOver and emulators like ScummVM or DOSBox.
 * **Fully Automated:** Runs invisibly in the background and updates Discord exactly when a recognized game launches.
 * **No Bloatware:** Uses a simple Python script instead of a heavy, battery-draining desktop app.
@@ -32,13 +33,13 @@ git clone [https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git](https://github.c
 cd ~/discord-status
 python3 -m venv venv
 source venv/bin/activate
-pip install pypresence psutil
+pip install pypresence psutil requests
 ```
 
 ## Step 2: Configure Your Games
 This script uses a configuration file so you don't have to touch the Python code for every new game. 
 
-Inside the `~/discord-status` folder, open `games.json` (or copy `games.example.json` to `games.json`) and add your game details:
+Inside the `~/discord-status` folder, open `games.json` (or copy `games.example.json` to `games.json`) and add your game details. You can use standard static text, or utilize a plugin for live stats:
 
 ```json
 [
@@ -50,9 +51,22 @@ Inside the `~/discord-status` folder, open `games.json` (or copy `games.example.
     "state": "In Game",
     "large_image": "homm3-cover",
     "large_text": "HoMM3 Complete"
+  },
+  {
+    "game_name": "League of Legends",
+    "process_name": "League of Legends",
+    "client_id": "YOUR_APPLICATION_ID_HERE",
+    "plugin": "league",
+    "large_image": "lol-logo"
   }
 ]
 ```
+
+### Advanced: Dynamic Plugins
+If you want your Discord status to update dynamically based on live in-game events, you can assign a plugin using the `"plugin"` key (as seen in the League of Legends example above). 
+
+*   **Included Plugins:** Currently, the `league` plugin is included out-of-the-box. It safely connects to Riot's local Live Client Data API to display your real-time Kills, Deaths, and Assists.
+*   **Custom Plugins:** You can write your own game-specific logic by creating a `.py` file inside the `plugins/` directory and adding a `get_rpc_update()` function that returns a `details` and `state` dictionary.
 
 ### Understanding `process_name`
 Because this script scans the *entire command line argument* running on your Mac, it is incredibly flexible. Here is a quick reference for what to put in `"process_name"`:
@@ -64,6 +78,8 @@ Because this script scans the *entire command line argument* running on your Mac
 | **ScummVM/Emulators** | The unique game ID or folder name | `project-nov` |
 
 *(See the **Troubleshooting** section below if you aren't sure how to find your game's process name!)*
+
+---
 
 ## Step 3: Automating with a macOS Launch Agent
 To make this run automatically in the background on startup, we use a macOS `.plist` file.
@@ -110,13 +126,8 @@ That's it! The script is now watching for your games in the background. **To add
 ## 🔍 How to Find Your Game's Process Name
 If you are running a game through a compatibility layer like Heroic, CrossOver, or ScummVM, the process running on your Mac might not just be the name of the game. 
 
-
 To find the exact `process_name` to put in your `games.json`, use this trick:
 
 1. Launch your game so it is actively running.
 2. Open your Mac's **Terminal** app.
 3. Type `ps x | grep -i "something_related_to_your_game"` and hit Enter.
-
----
-
-Made with the help of Gemini, Github Copilot.

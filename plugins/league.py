@@ -25,12 +25,12 @@ def get_rpc_update():
                     assists = scores.get("assists", 0)
                     
                     # Dynamic game state logic
-                    if kills >= deaths + 3:
-                        status = "Crushing it! 🔥"
-                    elif deaths >= kills + 3:
-                        status = "Feeding... 💀"
+                    if kills >= deaths + 4:
+                        status = "Faker cosplay 🐐"
+                    elif deaths >= kills + 4:
+                        status = "Feeding 😢"
                     else:
-                        status = "In a close match ⚔️"
+                        status = "Not feeding 👍"
                         
                     return {
                         "details": status,
@@ -43,5 +43,5 @@ def get_rpc_update():
         
     return {
         "details": "In Client / Loading",
-        "state": "Preparing for battle..."
+        "state": "Not doing much... 🍵"
     }

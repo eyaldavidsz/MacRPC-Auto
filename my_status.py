@@ -114,7 +114,7 @@ def background_watcher_loop():
 class DiscordRPCApp(rumps.App):
     def __init__(self):
         icon_path = os.path.join(SCRIPT_DIR, "menu_iconTemplate.png")
-        super(DiscordRPCApp, self).__init__("Discord RPC", title="", icon=icon_path)
+        super(DiscordRPCApp, self).__init__("Discord RPC", title="", icon=icon_path, template=True)
 
     @rumps.clicked("Open Config (games.json)")
     def open_config(self, _):

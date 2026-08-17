@@ -1,3 +1,5 @@
 venv/
 .DS_Store
 games.json
+build/
+dist/

@@ -26,7 +26,7 @@ def get_rpc_update():
                     
                     # Dynamic game state logic
                     if kills >= deaths + 4:
-                        status = "Faker cosplay 🐐"
+                        status = "Doing ok 😱"
                     elif deaths >= kills + 4:
                         status = "Feeding 😢"
                     else:

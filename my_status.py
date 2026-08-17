@@ -1,131 +1,173 @@
 import json
 import os
+import sys
 import time
 import psutil
 import importlib
 import threading
 import subprocess
+import shutil
 import rumps
-import sys
+import importlib.util
 from pypresence import Presence
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "games.json")
-sys.path.append(SCRIPT_DIR)
+# --- 1. PATH SETUP ---
+if 'RESOURCEPATH' in os.environ:
+    BUNDLE_DIR = os.environ['RESOURCEPATH']
+else:
+    BUNDLE_DIR = os.path.dirname(os.path.realpath(__file__))
 
-def load_games():
-    if not os.path.exists(CONFIG_PATH):
-        return []
+# Define the user's Application Support folder
+APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/DiscordRPC")
+CONFIG_PATH = os.path.join(APP_SUPPORT_DIR, "games.json")
+PLUGINS_DIR = os.path.join(APP_SUPPORT_DIR, "plugins")
+
+# Create the Application Support folder if it doesn't exist
+os.makedirs(APP_SUPPORT_DIR, exist_ok=True)
+
+# Copy the default games.json on first launch
+if not os.path.exists(CONFIG_PATH):
+    default_config = os.path.join(BUNDLE_DIR, "games.json")
+    if os.path.exists(default_config):
+        shutil.copy(default_config, CONFIG_PATH)
+
+# Copy the default plugins folder on first launch
+if not os.path.exists(PLUGINS_DIR):
+    default_plugins = os.path.join(BUNDLE_DIR, "plugins")
+    if os.path.exists(default_plugins):
+        shutil.copytree(default_plugins, PLUGINS_DIR)
+
+# Point Python's compass to the new Application Support folder so it finds the live plugins
+sys.path.insert(0, APP_SUPPORT_DIR)
+
+# --- 2. BACKGROUND RPC LOGIC ---
+def get_running_games():
+    """Reads the JSON config and checks if any configured games are currently running."""
     try:
         with open(CONFIG_PATH, "r") as f:
-            return json.load(f)
+            games = json.load(f)
     except Exception as e:
-        print(f"Error reading games.json: {e}")
-        return []
+        return None
 
-# --- 1. THE BACKGROUND WATCHER THREAD ---
-def background_watcher_loop():
-    active_rpc = None
-    current_game = None
-    last_game_state_hash = None 
+    # CRASH-PROOF PROCESS SCANNER:
+    # Instead of scanning all at once, we check them one by one.
+    # If macOS blocks access to a specific process, we just ignore it and move on!
+    running_processes = []
+    for p in psutil.process_iter(['name']):
+        try:
+            running_processes.append(p.name().lower())
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
 
-    print("Menu Bar App loaded. Watcher thread active...")
+    for game in games:
+        if game.get("process_name", "").lower() in running_processes:
+            return game
+    return None
+
+
+def update_rpc():
+    """The background loop that updates Discord."""
+    rpc = None
+    current_client_id = None
 
     while True:
-        games = load_games()
-        
-        running_process_cmds = []
-        for proc in psutil.process_iter(['name', 'cmdline']):
-            try:
-                if proc.info.get('cmdline'):
-                    full_cmd = " ".join(proc.info['cmdline']).lower()
-                    running_process_cmds.append(full_cmd)
-                elif proc.info.get('name'):
-                    running_process_cmds.append(proc.info['name'].lower())
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
+        # THE MASTER SAFETY NET:
+        # This try/except block ensures that if absolutely anything goes wrong,
+        # the thread will sleep for 5 seconds and try again, instead of dying.
+        try:
+            active_game = get_running_games()
 
-        matched_game = None
-        for game in games:
-            proc_name = game.get("process_name", "").lower()
-            if proc_name and any(proc_name in cmd for cmd in running_process_cmds):
-                matched_game = game
-                break
+            if active_game:
+                client_id = active_game.get("client_id")
+                
+                # Connect to Discord RPC if we aren't already connected
+                if rpc is None or current_client_id != client_id:
+                    if rpc:
+                        rpc.close()
+                    try:
+                        rpc = Presence(client_id)
+                        rpc.connect()
+                        current_client_id = client_id
+                    except Exception:
+                        rpc = None
 
-        if matched_game:
-            current_details = matched_game.get("details")
-            current_state = matched_game.get("state")
-
-            plugin_name = matched_game.get("plugin")
-            if plugin_name:
-                try:
-                    plugin_module = importlib.import_module(f"plugins.{plugin_name}")
-                    plugin_data = plugin_module.get_rpc_update()
-                    if plugin_data:
-                        current_details = plugin_data.get("details", current_details)
-                        current_state = plugin_data.get("state", current_state)
-                except Exception as e:
-                    print(f"Error running plugin '{plugin_name}': {e}")
-
-            current_game_state_hash = f"{matched_game.get('client_id')}_{current_details}_{current_state}"
-
-            if (matched_game != current_game) or (current_game_state_hash != last_game_state_hash):
-                if matched_game != current_game:
-                    if active_rpc:
+                if rpc:
+                    # If the game uses a dynamic plugin
+                    if "plugin" in active_game:
+                        plugin_name = active_game["plugin"]
+                        plugin_path = os.path.join(PLUGINS_DIR, f"{plugin_name}.py")
+                        
                         try:
-                            active_rpc.close()
-                        except Exception:
-                            pass
+                            # Direct file loading from the Application Support folder
+                            spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
+                            plugin_module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(plugin_module)
+                            
+                            plugin_data = plugin_module.get_rpc_update() 
+                            
+                            if plugin_data:
+                                rpc.update(**plugin_data)
+                                
+                        except Exception as plugin_error:
+                            error_log_path = os.path.join(APP_SUPPORT_DIR, "error_log.txt")
+                            with open(error_log_path, "a") as f:
+                                f.write(f"[{time.ctime()}] Plugin error: {plugin_error}\n")
+                    
+                    # If it's a standard static game config
+                    else:
+                        rpc.update(
+                            state=active_game.get("state"),
+                            details=active_game.get("details"),
+                            large_image=active_game.get("large_image"),
+                            large_text=active_game.get("large_text")
+                        )
+
+            else:
+                # No game running, disconnect RPC
+                if rpc:
                     try:
-                        active_rpc = Presence(matched_game["client_id"])
-                        active_rpc.connect()
-                    except Exception as e:
-                        print(f"Failed to connect RPC: {e}")
-                        active_rpc = None
+                        rpc.close()
+                    except:
+                        pass
+                    rpc = None
+                    current_client_id = None
 
-                if active_rpc:
-                    update_args = {}
-                    if current_details: update_args["details"] = current_details
-                    if current_state: update_args["state"] = current_state
-                    if matched_game.get("large_image"): update_args["large_image"] = matched_game["large_image"]
-                    if matched_game.get("large_text"): update_args["large_text"] = matched_game["large_text"]
-
-                    try:
-                        active_rpc.update(**update_args)
-                        current_game = matched_game
-                        last_game_state_hash = current_game_state_hash
-                        print(f"[{time.strftime('%H:%M:%S')}] Status Updated: {current_details} | {current_state}")
-                    except Exception as e:
-                        print(f"Failed to push update to Discord: {e}")
-
-        elif not matched_game and active_rpc:
-            try:
-                active_rpc.close()
-                print("Game closed. Status cleared.")
-            except Exception:
-                pass
-            active_rpc = None
-            current_game = None
-            last_game_state_hash = None
-
+        except Exception as main_thread_error:
+            # If the background thread hits a critical error, log it!
+            error_log_path = os.path.join(APP_SUPPORT_DIR, "error_log.txt")
+            with open(error_log_path, "a") as f:
+                f.write(f"[{time.ctime()}] Critical Thread Error: {main_thread_error}\n")
+        
+        # Always wait 5 seconds before checking again
         time.sleep(5)
 
-# --- 2. THE MAIN UI THREAD ---
+# --- 3. MENU BAR UI ---
 class DiscordRPCApp(rumps.App):
     def __init__(self):
-        icon_path = os.path.join(SCRIPT_DIR, "menu_iconTemplate.png")
-        super(DiscordRPCApp, self).__init__("Discord RPC", title="", icon=icon_path, template=True)
+        # We load the icon directly from the internal bundle, not the application support folder
+        icon_path = os.path.join(BUNDLE_DIR, "menu_iconTemplate.png")
+        
+        super(DiscordRPCApp, self).__init__(
+            "Discord RPC", 
+            title="", 
+            icon=icon_path, 
+            template=True # Forces macOS to use the stencil mode for light/dark theme matching
+        )
 
     @rumps.clicked("Open Config (games.json)")
     def open_config(self, _):
-        # This will open your JSON file in your default Mac text editor
-        subprocess.call(['open', CONFIG_PATH])
+        # Opens the user-editable config in the Application Support folder
+        subprocess.call(["open", CONFIG_PATH])
+
+    @rumps.clicked("Open Plugins Folder")
+    def open_plugins(self, _):
+        # Opens the user-editable plugins in the Application Support folder
+        subprocess.call(["open", PLUGINS_DIR])
+
 
 if __name__ == "__main__":
-    # Start the watcher in the background
-    watcher_thread = threading.Thread(target=background_watcher_loop)
-    watcher_thread.daemon = True 
-    watcher_thread.start()
-
-    # Start the macOS Menu Bar UI (Rumps automatically adds a "Quit" button)
+    # Start the background Discord loop in a separate daemon thread
+    threading.Thread(target=update_rpc, daemon=True).start()
+    
+    # Run the native macOS menu bar UI
     DiscordRPCApp().run()

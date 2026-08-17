@@ -1,0 +1,4 @@
+pypresence
+psutil
+rumps
+py2app

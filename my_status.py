@@ -49,21 +49,29 @@ def get_running_games():
     except Exception as e:
         return None
 
-    # CRASH-PROOF PROCESS SCANNER:
-    # Instead of scanning all at once, we check them one by one.
-    # If macOS blocks access to a specific process, we just ignore it and move on!
-    running_processes = []
-    for p in psutil.process_iter(['name']):
+    # 1. Grab the full command line of every running app
+    running_cmdlines = []
+    for p in psutil.process_iter(['cmdline']):
         try:
-            running_processes.append(p.name().lower())
+            cmd = p.info.get('cmdline')
+            if cmd:
+                # 2. Glue the list together into one giant lowercase sentence
+                full_cmd_string = " ".join(cmd).lower()
+                running_cmdlines.append(full_cmd_string)
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
 
+    # 3. Check our cheat sheet against the command lines
     for game in games:
-        if game.get("process_name", "").lower() in running_processes:
-            return game
+        target_name = game.get("process_name", "").lower()
+        
+        # Look through every massive command line string running on the Mac
+        for running_cmd in running_cmdlines:
+            # If your custom process_name appears ANYWHERE in that string, it's a match!
+            if target_name in running_cmd:
+                return game
+                
     return None
-
 
 def update_rpc():
     """The background loop that updates Discord."""

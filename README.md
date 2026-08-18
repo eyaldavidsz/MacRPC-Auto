@@ -58,16 +58,38 @@ For simple games, just add an entry to your `games.json` file:
   {
     "process_name": "minecraft",
     "client_id": "YOUR_DISCORD_APP_ID" // this is the 'Application ID' under General Information in the dev portal
-    "details": "Mining diamonds",
-    "state": "Singleplayer",
+    "details": "Mining diamonds", // you decide what to put here
+    "state": "Singleplayer(come join me!)", // and here
     "large_image": "icon_name", // this is the name of the image file you placed in Rich Presence -> Art Assets
     "large_text": "Minecraft"
   }
 ]
 ```
 
-**🔍 Pro-Tip on Process Names:** 
-macOS process names are tricky. What Activity Monitor calls "League of Legends" might actually be `leagueclient` under the hood. If your game isn't being detected, open your Terminal, run `ps -A | grep -i "your_game_name"`, and use the raw UNIX executable name in the `"process_name"` field!
+### 🔍 Understanding "process_name"
+
+MacRPC-Auto can detect native apps, Java games, Wine wrappers, and even specific emulator ROMs!
+
+What Activity Monitor calls a game isn't always what the system sees. For example, Activity Monitor might show "League of Legends", but the actual background file is leagueclient. Because MacRPC-Auto checks the entire command line (which includes all the folder names), you don't have to guess the exact hidden file name. You can usually just use the game's normal title, and the script will spot it hiding in the folder path!
+
+**If you want to make sure, here's how to find a great keyword to use for 'process_name':**
+1. Make sure your game or app is currently running.
+2. Open your Mac's **Terminal** app.
+3. We need to see how your Mac is running the game behind the scenes. Type `ps -A | grep -i "guess"` (replace "guess" with a piece of the game's title) and hit Enter:
+   `ps -A | grep -i "sims"`
+4. Look at the output. You will see a long string of text showing the actual system path. 
+5. Because MacRPC-Auto scans this *entire* string, you can pick **any unique keyword** from it to put in your `games.json`!
+
+**Quick Reference Guide:**
+
+| What you might see in Terminal (The result of your guess) | Valid keywords you could use in `games.json` |
+| :--- | :--- | 
+| `/Applications/Baldurs Gate 3.app/Contents/MacOS/bg3` | `baldurs gate 3` OR `bg3` | 
+| `/.../CrossOver/.../The Sims 4/Game/Bin/TS4_x64.exe` | `the sims 4` OR `ts4_x64.exe` |
+| `/usr/bin/java -jar /.../minecraft/versions/1.20.jar` | `minecraft` | 
+| `./gogdl [...] launch /Applications/Blade Runner.app` | `blade runner` |
+
+*Note: I don't have some of these games installed, so I used AI to generate a generic terminal output for them for the sake of the example!*
 
 ---
 
@@ -92,7 +114,7 @@ Want to show live in-game stats (like your current champion in League of Legends
 ### Example Plugin (`league.py`):
 ```python
 def get_rpc_update():
-    # You can add logic here to fetch live data from local game APIs!
+    # Logic here to fetch live data from local game APIs...
     
     return {
         "details": "Trying not to feed",

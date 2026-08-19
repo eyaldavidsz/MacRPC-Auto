@@ -51,23 +51,23 @@ When you build the app, it creates a dedicated, safe folder for your live config
 ### 📝 Editing `games.json` (Static Status)
 To start, make your custom app in the [Discord Developer Portal](https://discord.com/developers/applications)
 and add an image for it in the left sidebar (Overview -> Rich Presence -> Art Assets).
+The developer portal is also the only way you can change your application's *title* on Disocrd(Discord's rules don't allow you to change it dynamically as far as I know). 
 
 For simple games, just add an entry to your `games.json` file:
 ```json
 [
   {
-    "process_name": "minecraft",
-    "client_id": "YOUR_DISCORD_APP_ID" // this is the 'Application ID' under General Information in the dev portal
+    "game_name": "Minecraft", // never actually used by the code, this field serves mainly for clarity
+    "process_name": "minecraft", // explanation below
+    "client_id": "YOUR_DISCORD_APP_ID", // this is the 'Application ID' on the Discord dev portal(under General Info)
     "details": "Mining diamonds", // you decide what to put here
-    "state": "Singleplayer(come join me!)", // and here
+    "state": "Singleplayer(come join me!)", // you decide what to put here
     "large_image": "icon_name", // this is the name of the image file you placed in Rich Presence -> Art Assets
-    "large_text": "Minecraft"
+    "large_text": "Minecraft" // you decide what to put here, will show when you hover over the image on Discord
   }
 ]
 ```
-
-### 🔍 Understanding "process_name"
-
+### 🔍 Understanding `process_name`
 MacRPC-Auto can detect native apps, Java games, Wine wrappers, and even specific emulator ROMs!
 
 What Activity Monitor calls a game isn't always what the system sees. For example, Activity Monitor might show "League of Legends", but the actual background file is leagueclient. Because MacRPC-Auto checks the entire command line (which includes all the folder names), you don't have to guess the exact hidden file name. You can usually just use the game's normal title, and the script will spot it hiding in the folder path!

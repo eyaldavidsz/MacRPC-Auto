@@ -16,7 +16,6 @@ if 'RESOURCEPATH' in os.environ:
     BUNDLE_DIR = os.environ['RESOURCEPATH']
 else:
     BUNDLE_DIR = os.path.dirname(os.path.realpath(__file__))
-
 # Define the user's Application Support folder
 APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/DiscordRPC")
 CONFIG_PATH = os.path.join(APP_SUPPORT_DIR, "games.json")
@@ -114,6 +113,18 @@ def update_rpc():
                             plugin_data = plugin_module.get_rpc_update() 
                             
                             if plugin_data:
+                                # 1. Safely grab the art settings from games.json
+                                json_large_image = active_game.get("large_image")
+                                json_large_text = active_game.get("large_text")
+
+                                # 2. Inject them into the plugin's data IF the plugin didn't already set them
+                                if json_large_image and "large_image" not in plugin_data:
+                                    plugin_data["large_image"] = json_large_image
+                                    
+                                if json_large_text and "large_text" not in plugin_data:
+                                    plugin_data["large_text"] = json_large_text
+
+                                # 3. Send the newly merged data to Discord!
                                 rpc.update(**plugin_data)
                                 
                         except Exception as plugin_error:
